@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: comfyui-serverless
-  labels:
-    name: comfyui-serverless
-    app: comfyui-serverless
-    environment: production
