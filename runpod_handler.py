@@ -140,7 +140,7 @@ def example_workflow_request():
         "input": {
             "endpoint": "/api/v1/workflows",
             "method": "POST",
-            "api_key": "***REMOVED***",
+            "api_key": "YOUR_API_KEY_HERE",
             "payload": {
                 "workflow_definition": {
                     "nodes": {

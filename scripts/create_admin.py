@@ -30,14 +30,14 @@ async def create_admin_user():
             admin_user = User(
                 email="admin@comfyui.local",
                 username="admin",
-                hashed_password=get_password_hash("admin123"),
+                hashed_password=get_password_hash(os.getenv("ADMIN_PASSWORD", "admin123")),
                 is_active=True,
                 is_superuser=True
             )
             db.add(admin_user)
             db.commit()
             db.refresh(admin_user)
-            print("✅ Admin user created: admin@comfyui.local (password: admin123)")
+            print("✅ Admin user created: admin@comfyui.local (password: from ADMIN_PASSWORD env var)")
         else:
             print("✅ Admin user already exists")
         

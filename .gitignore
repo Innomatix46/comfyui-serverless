@@ -67,6 +67,19 @@ ipython_config.py
 ehthumbs.db
 Thumbs.db
 
+# Security - Sensitive files
+.env
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cert
+id_rsa*
+api_token.txt
+jwt_token.txt
+*.secret
+
 # Logs
 *.log
 logs/
