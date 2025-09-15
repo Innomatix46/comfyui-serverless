@@ -1,0 +1,87 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: comfyui_serverless
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: ***REMOVED***
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d comfyui_serverless"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache/Queue
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ComfyUI Serverless API (Production)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://admin:***REMOVED***@postgres:5432/comfyui_serverless
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=***REMOVED***
+      - DEBUG=false
+      - API_TITLE=ComfyUI Serverless API
+      - API_VERSION=1.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - api_logs:/app/logs
+      - api_outputs:/app/outputs
+    restart: unless-stopped
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --workers 4
+
+  # Celery Worker for Background Tasks
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    environment:
+      - DATABASE_URL=postgresql://admin:***REMOVED***@postgres:5432/comfyui_serverless
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=***REMOVED***
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - worker_logs:/app/logs
+    restart: unless-stopped
+    command: celery -A src.core.celery worker --loglevel=info --concurrency=2
+
+volumes:
+  postgres_data:
+  redis_data:
+  api_logs:
+  api_outputs:
+  worker_logs:

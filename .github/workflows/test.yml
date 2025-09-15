@@ -1,0 +1,358 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # Unit and Integration Tests
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+        test-group: [unit, integration, api]
+    
+    services:
+      # PostgreSQL for database tests
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: test_comfyui
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      # Redis for caching tests
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[test,dev]"
+    
+    - name: Create test directories
+      run: |
+        mkdir -p tests/logs
+        mkdir -p tests/temp
+        mkdir -p tests/outputs
+        mkdir -p htmlcov
+    
+    - name: Run linting
+      if: matrix.test-group == 'unit'
+      run: |
+        flake8 src tests --max-line-length=100
+        black --check src tests
+        isort --check-only src tests
+        mypy src --ignore-missing-imports
+    
+    - name: Run security check
+      if: matrix.test-group == 'unit'
+      run: |
+        bandit -r src/ -f json -o bandit-report.json || true
+        safety check --json --output safety-report.json || true
+    
+    - name: Run unit tests
+      if: matrix.test-group == 'unit'
+      env:
+        TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test_comfyui
+        TEST_REDIS_URL: redis://localhost:6379/15
+        MOCK_EXTERNAL_SERVICES: "true"
+        SKIP_EXTERNAL_TESTS: "true"
+      run: |
+        pytest tests/unit/ -v \
+          --cov=src \
+          --cov-report=xml:coverage-unit.xml \
+          --cov-report=html:htmlcov-unit \
+          --junit-xml=junit-unit.xml \
+          -m "unit and not slow"
+    
+    - name: Run integration tests
+      if: matrix.test-group == 'integration'
+      env:
+        TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test_comfyui
+        TEST_REDIS_URL: redis://localhost:6379/15
+        TEST_CELERY_BROKER_URL: redis://localhost:6379/14
+        MOCK_EXTERNAL_SERVICES: "true"
+      run: |
+        pytest tests/integration/ -v \
+          --cov=src \
+          --cov-report=xml:coverage-integration.xml \
+          --cov-report=html:htmlcov-integration \
+          --junit-xml=junit-integration.xml \
+          -m "integration and not slow"
+    
+    - name: Run API tests
+      if: matrix.test-group == 'api'
+      env:
+        TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test_comfyui
+        TEST_REDIS_URL: redis://localhost:6379/15
+        MOCK_EXTERNAL_SERVICES: "true"
+      run: |
+        pytest tests/integration/test_api_endpoints.py -v \
+          --cov=src \
+          --cov-report=xml:coverage-api.xml \
+          --cov-report=html:htmlcov-api \
+          --junit-xml=junit-api.xml \
+          -m "api and not slow"
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage-*.xml
+        flags: ${{ matrix.test-group }}
+        name: codecov-${{ matrix.python-version }}-${{ matrix.test-group }}
+        fail_ci_if_error: false
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.python-version }}-${{ matrix.test-group }}
+        path: |
+          junit-*.xml
+          htmlcov-*
+          coverage-*.xml
+          bandit-report.json
+          safety-report.json
+
+  # Performance Tests
+  performance:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: test_comfyui
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[test,dev]"
+    
+    - name: Run performance tests
+      env:
+        TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test_comfyui
+        TEST_REDIS_URL: redis://localhost:6379/15
+        PERFORMANCE_TEST_ENABLED: "true"
+        MOCK_EXTERNAL_SERVICES: "true"
+      run: |
+        pytest tests/load/ -v \
+          --benchmark-json=benchmark-results.json \
+          --junit-xml=junit-performance.xml \
+          -m "performance" \
+          --timeout=600
+    
+    - name: Upload performance results
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results
+        path: |
+          benchmark-results.json
+          junit-performance.xml
+
+  # Security Tests
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+    
+    - name: Run Bandit security scan
+      run: |
+        bandit -r src/ -f json -o bandit-results.json
+        bandit -r src/ -f txt
+    
+    - name: Run Safety vulnerability check
+      run: |
+        safety check --json --output safety-results.json
+        safety check
+    
+    - name: Upload security results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-results
+        path: |
+          bandit-results.json
+          safety-results.json
+
+  # Docker Tests
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build test image
+      run: |
+        docker build -t comfyui-serverless:test -f docker/Dockerfile.test .
+    
+    - name: Run tests in container
+      run: |
+        docker run --rm \
+          -e TEST_DATABASE_URL=sqlite:///./test.db \
+          -e TEST_REDIS_URL=redis://redis:6379/15 \
+          -e MOCK_EXTERNAL_SERVICES=true \
+          comfyui-serverless:test \
+          pytest tests/unit/ -v -m "unit and not external"
+
+  # E2E Tests (if enabled)
+  e2e:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[e2e]') || github.event_name == 'schedule'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[test]"
+    
+    - name: Start services with Docker Compose
+      run: |
+        docker-compose -f docker-compose.test.yml up -d
+        sleep 30  # Wait for services to be ready
+    
+    - name: Run E2E tests
+      env:
+        TEST_API_BASE_URL: http://localhost:8000
+        SKIP_EXTERNAL_TESTS: "false"
+      run: |
+        pytest tests/ -v \
+          --junit-xml=junit-e2e.xml \
+          -m "e2e" \
+          --timeout=300
+    
+    - name: Stop services
+      if: always()
+      run: |
+        docker-compose -f docker-compose.test.yml logs
+        docker-compose -f docker-compose.test.yml down -v
+    
+    - name: Upload E2E results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: e2e-results
+        path: junit-e2e.xml
+
+  # Test Report
+  report:
+    needs: [test, performance, security, docker]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+    
+    - name: Publish Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: "**/junit-*.xml"
+        report_individual_runs: true
+        check_run_annotations: all tests, skipped tests
+    
+    - name: Create test summary
+      run: |
+        echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Files" >> $GITHUB_STEP_SUMMARY
+        find . -name "junit-*.xml" -exec basename {} \; >> $GITHUB_STEP_SUMMARY
+        
+        echo "### Coverage Files" >> $GITHUB_STEP_SUMMARY  
+        find . -name "coverage-*.xml" -exec basename {} \; >> $GITHUB_STEP_SUMMARY
+        
+        echo "### Performance Results" >> $GITHUB_STEP_SUMMARY
+        if [ -f benchmark-results.json ]; then
+          echo "✅ Performance tests completed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⏭️ Performance tests skipped" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "### Security Results" >> $GITHUB_STEP_SUMMARY
+        if [ -f bandit-results.json ]; then
+          echo "✅ Security scan completed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⏭️ Security scan skipped" >> $GITHUB_STEP_SUMMARY
+        fi

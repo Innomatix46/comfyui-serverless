@@ -1,0 +1,1323 @@
+openapi: 3.0.0
+info:
+  title: ComfyUI Serverless API
+  version: 1.0.0
+  description: |
+    Serverless ComfyUI API for AI image generation and workflow execution.
+    
+    This API provides a complete solution for running ComfyUI workflows in a serverless environment,
+    with features including:
+    - Asynchronous workflow execution
+    - Model management and caching  
+    - File upload/download
+    - Real-time progress tracking
+    - Webhook notifications
+    - Authentication and rate limiting
+    
+  contact:
+    name: API Support
+    email: support@comfyui-serverless.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.comfyui-serverless.com
+    description: Production server
+  - url: https://staging-api.comfyui-serverless.com
+    description: Staging server
+  - url: http://localhost:8000
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  # Root endpoint
+  /:
+    get:
+      summary: API Information
+      description: Get basic API information and health status
+      tags:
+        - General
+      security: []
+      responses:
+        '200':
+          description: API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    example: "ComfyUI Serverless API"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  description:
+                    type: string
+                  docs_url:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: number
+                    format: float
+
+  # Authentication endpoints
+  /auth/register:
+    post:
+      summary: Register User
+      description: Register a new user account
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '200':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Registration failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      summary: User Login
+      description: Authenticate user and return access tokens
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+                password:
+                  type: string
+                  example: "securepassword"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      summary: Refresh Token
+      description: Refresh access token using refresh token
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '401':
+          description: Invalid refresh token
+
+  /auth/me:
+    get:
+      summary: Get Current User
+      description: Get current user information
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Unauthorized
+
+  /auth/logout:
+    post:
+      summary: Logout
+      description: Logout user and blacklist token
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Successfully logged out"
+
+  # Workflow endpoints
+  /workflows/execute:
+    post:
+      summary: Execute Workflow
+      description: Submit a ComfyUI workflow for asynchronous execution
+      tags:
+        - Workflows
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowExecutionRequest'
+      responses:
+        '200':
+          description: Workflow submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowExecutionResponse'
+        '400':
+          description: Invalid workflow definition
+        '429':
+          description: Rate limit exceeded
+        '500':
+          description: Internal server error
+
+  /workflows/{execution_id}:
+    get:
+      summary: Get Workflow Result
+      description: Get workflow execution result and outputs
+      tags:
+        - Workflows
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Workflow execution ID
+      responses:
+        '200':
+          description: Workflow result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResult'
+        '404':
+          description: Workflow not found
+
+  /workflows/:
+    get:
+      summary: List Workflow Executions
+      description: List user's workflow executions with filtering
+      tags:
+        - Workflows
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/WorkflowStatus'
+          description: Filter by status
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of results
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Offset for pagination
+      responses:
+        '200':
+          description: List of workflow executions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkflowResult'
+
+  /workflows/{execution_id}/cancel:
+    post:
+      summary: Cancel Workflow
+      description: Cancel a running or pending workflow
+      tags:
+        - Workflows
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workflow cancelled
+        '400':
+          description: Cannot cancel workflow
+        '404':
+          description: Workflow not found
+
+  /workflows/{execution_id}/status:
+    get:
+      summary: Get Workflow Status
+      description: Get real-time workflow status and progress
+      tags:
+        - Workflows
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workflow status and progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  execution_id:
+                    type: string
+                  status:
+                    $ref: '#/components/schemas/WorkflowStatus'
+                  created_at:
+                    type: string
+                    format: date-time
+                  started_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  queue_position:
+                    type: integer
+                    nullable: true
+                  progress:
+                    type: object
+                    nullable: true
+                  estimated_completion:
+                    type: string
+                    format: date-time
+                    nullable: true
+
+  /workflows/{execution_id}/logs:
+    get:
+      summary: Get Workflow Logs
+      description: Get workflow execution logs
+      tags:
+        - Workflows
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [DEBUG, INFO, WARNING, ERROR]
+          description: Filter by log level
+        - name: tail
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          description: Number of recent logs
+      responses:
+        '200':
+          description: Workflow logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  execution_id:
+                    type: string
+                  logs:
+                    type: array
+                    items:
+                      type: object
+                  total_count:
+                    type: integer
+                  filtered:
+                    type: boolean
+
+  /workflows/{execution_id}/retry:
+    post:
+      summary: Retry Failed Workflow
+      description: Retry a failed workflow execution
+      tags:
+        - Workflows
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Retry successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  execution_id:
+                    type: string
+                  status:
+                    $ref: '#/components/schemas/WorkflowStatus'
+                  queue_position:
+                    type: integer
+                  retried_from:
+                    type: string
+
+  # Model Management endpoints
+  /models/:
+    get:
+      summary: List Models
+      description: List all available models with their status
+      tags:
+        - Models
+      parameters:
+        - name: model_type
+          in: query
+          schema:
+            $ref: '#/components/schemas/ModelType'
+          description: Filter by model type
+        - name: available_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Show only available models
+      responses:
+        '200':
+          description: List of models
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelListResponse'
+
+  /models/{model_name}:
+    get:
+      summary: Get Model Status
+      description: Get detailed status for a specific model
+      tags:
+        - Models
+      parameters:
+        - name: model_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Model status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelStatus'
+        '404':
+          description: Model not found
+
+  /models/{model_name}/download:
+    post:
+      summary: Download Model
+      description: Download a model from URL
+      tags:
+        - Models
+      parameters:
+        - name: model_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: model_type
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/ModelType'
+        - name: download_url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+        - name: description
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Download started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  model_name:
+                    type: string
+                  model_type:
+                    type: string
+
+  /models/{model_name}/load:
+    post:
+      summary: Load Model
+      description: Load model into memory
+      tags:
+        - Models
+      parameters:
+        - name: model_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: model_type
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/ModelType'
+      responses:
+        '200':
+          description: Model loaded successfully
+
+  /models/{model_name}/unload:
+    post:
+      summary: Unload Model
+      description: Unload model from memory
+      tags:
+        - Models
+      parameters:
+        - name: model_name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Model unloaded successfully
+
+  /models/cleanup:
+    post:
+      summary: Cleanup Unused Models
+      description: Clean up models that haven't been used recently
+      tags:
+        - Models
+      parameters:
+        - name: max_age_hours
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 24
+            default: 1
+      responses:
+        '200':
+          description: Cleanup completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  models_unloaded:
+                    type: array
+                    items:
+                      type: string
+
+  # File Management endpoints
+  /files/upload:
+    post:
+      summary: Upload File
+      description: Upload a file for use in workflows
+      tags:
+        - Files
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                description:
+                  type: string
+      responses:
+        '200':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResponse'
+        '413':
+          description: File too large
+
+  /files/{file_id}:
+    get:
+      summary: Download File
+      description: Download a file by ID
+      tags:
+        - Files
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found
+
+  /files/{file_id}/info:
+    get:
+      summary: Get File Info
+      description: Get file information and metadata
+      tags:
+        - Files
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileInfo'
+
+  # Health Check endpoints
+  /health/:
+    get:
+      summary: Basic Health Check
+      description: Basic API health check
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /health/detailed:
+    get:
+      summary: Detailed Health Check
+      description: Detailed health check with service statuses
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Detailed health information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailedHealthStatus'
+
+  /health/readiness:
+    get:
+      summary: Readiness Probe
+      description: Kubernetes readiness probe
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+        '503':
+          description: Service is not ready
+
+  /health/liveness:
+    get:
+      summary: Liveness Probe
+      description: Kubernetes liveness probe
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service is alive
+
+  # Metrics endpoints
+  /metrics/:
+    get:
+      summary: Get System Metrics
+      description: Get system performance metrics
+      tags:
+        - Metrics
+      responses:
+        '200':
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemMetrics'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # User schemas
+    UserCreate:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        username:
+          type: string
+          example: "johndoe"
+        password:
+          type: string
+          minLength: 8
+          example: "securepassword123"
+        is_active:
+          type: boolean
+          default: true
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Token:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refresh_token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        token_type:
+          type: string
+          example: "bearer"
+        expires_in:
+          type: integer
+          example: 1800
+
+    # Workflow schemas
+    WorkflowStatus:
+      type: string
+      enum:
+        - pending
+        - running
+        - completed
+        - failed
+        - cancelled
+      example: "pending"
+
+    Priority:
+      type: string
+      enum:
+        - low
+        - normal
+        - high
+      example: "normal"
+
+    WorkflowNodeInput:
+      type: object
+      required:
+        - name
+        - type
+        - value
+      properties:
+        name:
+          type: string
+          example: "seed"
+        type:
+          type: string
+          example: "INT"
+        value:
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+            - type: array
+            - type: object
+          example: 12345
+        required:
+          type: boolean
+          default: true
+
+    WorkflowNode:
+      type: object
+      required:
+        - id
+        - class_type
+      properties:
+        id:
+          type: string
+          example: "1"
+        class_type:
+          type: string
+          example: "KSampler"
+        inputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowNodeInput'
+          default: []
+        outputs:
+          type: array
+          items:
+            type: string
+          default: []
+
+    WorkflowDefinition:
+      type: object
+      required:
+        - nodes
+      properties:
+        nodes:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/WorkflowNode'
+          example:
+            "1":
+              id: "1"
+              class_type: "CheckpointLoaderSimple"
+              inputs:
+                - name: "ckpt_name"
+                  type: "STRING"
+                  value: "v1-5-pruned-emaonly.ckpt"
+                  required: true
+        metadata:
+          type: object
+          additionalProperties: true
+          default: {}
+
+    WorkflowExecutionRequest:
+      type: object
+      required:
+        - workflow
+      properties:
+        workflow:
+          $ref: '#/components/schemas/WorkflowDefinition'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        webhook_url:
+          type: string
+          format: uri
+          nullable: true
+          example: "https://your-app.com/webhook"
+        metadata:
+          type: object
+          additionalProperties: true
+          default: {}
+        timeout_minutes:
+          type: integer
+          minimum: 1
+          maximum: 120
+          default: 30
+
+    WorkflowExecutionResponse:
+      type: object
+      required:
+        - execution_id
+        - status
+        - created_at
+      properties:
+        execution_id:
+          type: string
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        status:
+          $ref: '#/components/schemas/WorkflowStatus'
+        created_at:
+          type: string
+          format: date-time
+        estimated_duration:
+          type: integer
+          nullable: true
+          description: "Estimated duration in seconds"
+        queue_position:
+          type: integer
+          nullable: true
+          example: 3
+
+    WorkflowResult:
+      type: object
+      required:
+        - execution_id
+        - status
+      properties:
+        execution_id:
+          type: string
+        status:
+          $ref: '#/components/schemas/WorkflowStatus'
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        duration_seconds:
+          type: number
+          format: float
+          nullable: true
+        outputs:
+          type: object
+          additionalProperties: true
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        logs:
+          type: array
+          items:
+            type: object
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    # Model schemas
+    ModelType:
+      type: string
+      enum:
+        - checkpoint
+        - lora
+        - embedding
+        - vae
+        - controlnet
+        - upscaler
+      example: "checkpoint"
+
+    ModelStatus:
+      type: object
+      required:
+        - name
+        - type
+        - is_loaded
+        - is_downloading
+      properties:
+        name:
+          type: string
+          example: "sd-v1-5-inpainting.ckpt"
+        type:
+          $ref: '#/components/schemas/ModelType'
+        is_loaded:
+          type: boolean
+        is_downloading:
+          type: boolean
+        download_progress:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          nullable: true
+        last_used:
+          type: string
+          format: date-time
+          nullable: true
+        memory_usage_mb:
+          type: number
+          format: float
+          nullable: true
+
+    ModelListResponse:
+      type: object
+      required:
+        - models
+        - total_memory_usage_mb
+        - available_memory_mb
+      properties:
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelStatus'
+        total_memory_usage_mb:
+          type: number
+          format: float
+        available_memory_mb:
+          type: number
+          format: float
+
+    # File schemas
+    FileUploadResponse:
+      type: object
+      required:
+        - file_id
+        - filename
+        - size
+        - content_type
+      properties:
+        file_id:
+          type: string
+          example: "file_abc123"
+        filename:
+          type: string
+          example: "input_image.png"
+        size:
+          type: integer
+          example: 1048576
+        content_type:
+          type: string
+          example: "image/png"
+        upload_url:
+          type: string
+          format: uri
+          nullable: true
+
+    FileInfo:
+      type: object
+      required:
+        - file_id
+        - filename
+        - size
+        - content_type
+        - created_at
+      properties:
+        file_id:
+          type: string
+        filename:
+          type: string
+        size:
+          type: integer
+        content_type:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        download_url:
+          type: string
+          format: uri
+          nullable: true
+
+    # Health schemas
+    HealthStatus:
+      type: object
+      required:
+        - status
+        - timestamp
+        - version
+        - uptime_seconds
+      properties:
+        status:
+          type: string
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: "1.0.0"
+        uptime_seconds:
+          type: number
+          format: float
+
+    ServiceHealthStatus:
+      type: object
+      required:
+        - name
+        - status
+      properties:
+        name:
+          type: string
+          example: "database"
+        status:
+          type: string
+          enum: [healthy, unhealthy, degraded]
+        response_time_ms:
+          type: number
+          format: float
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    DetailedHealthStatus:
+      allOf:
+        - $ref: '#/components/schemas/HealthStatus'
+        - type: object
+          required:
+            - services
+            - system
+          properties:
+            services:
+              type: array
+              items:
+                $ref: '#/components/schemas/ServiceHealthStatus'
+            system:
+              type: object
+              additionalProperties: true
+
+    # Metrics schemas
+    SystemMetrics:
+      type: object
+      required:
+        - cpu_usage_percent
+        - memory_usage_percent
+        - disk_usage_percent
+        - active_executions
+        - queue_size
+        - total_executions
+        - average_execution_time_seconds
+      properties:
+        cpu_usage_percent:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        memory_usage_percent:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        gpu_usage_percent:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          nullable: true
+        gpu_memory_usage_percent:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          nullable: true
+        disk_usage_percent:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        active_executions:
+          type: integer
+          minimum: 0
+        queue_size:
+          type: integer
+          minimum: 0
+        total_executions:
+          type: integer
+          minimum: 0
+        average_execution_time_seconds:
+          type: number
+          format: float
+          minimum: 0
+
+    # Error schemas
+    ErrorDetail:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          example: "Field 'workflow.nodes' is required"
+        field:
+          type: string
+          nullable: true
+          example: "workflow.nodes"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - timestamp
+      properties:
+        error:
+          type: string
+          example: "validation_error"
+        message:
+          type: string
+          example: "Invalid request data"
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        request_id:
+          type: string
+          nullable: true
+          example: "req_abc123"
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "unauthorized"
+            message: "Authentication required"
+            timestamp: "2024-01-01T00:00:00Z"
+
+    ForbiddenError:
+      description: Access denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "forbidden"
+            message: "Access denied"
+            timestamp: "2024-01-01T00:00:00Z"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "not_found"
+            message: "Resource not found"
+            timestamp: "2024-01-01T00:00:00Z"
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "validation_error"
+            message: "Invalid request data"
+            details:
+              - code: "REQUIRED_FIELD"
+                message: "Field 'workflow' is required"
+                field: "workflow"
+            timestamp: "2024-01-01T00:00:00Z"
+
+    RateLimitError:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "rate_limit_exceeded"
+            message: "Too many requests"
+            timestamp: "2024-01-01T00:00:00Z"
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit per hour
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests in current window
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Time when rate limit resets (Unix timestamp)
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "internal_error"
+            message: "An internal error occurred"
+            timestamp: "2024-01-01T00:00:00Z"

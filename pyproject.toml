@@ -1,0 +1,374 @@
+# pyproject.toml - Enhanced for comprehensive testing
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comfyui-serverless"
+version = "1.0.0"
+description = "Production-ready serverless ComfyUI API with advanced testing"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "ComfyUI Serverless Team", email = "team@comfyui-serverless.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["comfyui", "stable-diffusion", "ai", "api", "serverless"]
+requires-python = ">=3.9"
+
+dependencies = [
+    # Core API framework
+    "fastapi>=0.104.0,<0.105.0",
+    "uvicorn[standard]>=0.24.0,<0.25.0",
+    "pydantic>=2.4.0,<2.5.0",
+    "starlette>=0.27.0,<0.28.0",
+    
+    # Database
+    "sqlalchemy>=2.0.0,<2.1.0", 
+    "alembic>=1.12.0,<1.13.0",
+    "psycopg2-binary>=2.9.7,<2.10.0",
+    "asyncpg>=0.29.0,<0.30.0",
+    
+    # Task queue
+    "celery>=5.3.0,<5.4.0",
+    "redis>=5.0.0,<5.1.0",
+    
+    # Storage
+    "boto3>=1.34.0,<1.35.0",
+    "botocore>=1.34.0,<1.35.0",
+    
+    # HTTP client
+    "aiohttp>=3.9.0,<3.10.0",
+    "httpx>=0.25.0,<0.26.0",
+    
+    # Authentication & Security
+    "python-jose[cryptography]>=3.3.0,<3.4.0",
+    "passlib[bcrypt]>=1.7.4,<1.8.0",
+    "python-multipart>=0.0.6,<0.1.0",
+    
+    # Monitoring & Logging
+    "structlog>=23.2.0,<23.3.0",
+    "prometheus-client>=0.19.0,<0.20.0",
+    
+    # Image processing
+    "pillow>=10.1.0,<10.2.0",
+    
+    # Utilities
+    "python-dotenv>=1.0.0,<1.1.0",
+    "click>=8.1.7,<8.2.0",
+    "pyyaml>=6.0.1,<6.1.0",
+    "jinja2>=3.1.2,<3.2.0",
+]
+
+[project.optional-dependencies]
+# Testing dependencies
+test = [
+    # Core testing
+    "pytest>=7.4.0,<7.5.0",
+    "pytest-asyncio>=0.21.0,<0.22.0", 
+    "pytest-cov>=4.1.0,<4.2.0",
+    "pytest-xdist>=3.4.0,<3.5.0",
+    "pytest-timeout>=2.2.0,<2.3.0",
+    "pytest-mock>=3.12.0,<3.13.0",
+    "pytest-benchmark>=4.0.0,<4.1.0",
+    "pytest-html>=4.1.0,<4.2.0",
+    "pytest-sugar>=0.9.7,<0.10.0",
+    
+    # Test utilities
+    "factory-boy>=3.3.0,<3.4.0",
+    "faker>=20.1.0,<20.2.0",
+    "freezegun>=1.2.2,<1.3.0",
+    "responses>=0.24.0,<0.25.0",
+    "aioresponses>=0.7.4,<0.8.0",
+    
+    # Performance testing
+    "locust>=2.17.0,<2.18.0",
+    "pytest-benchmark>=4.0.0,<4.1.0",
+    "memory-profiler>=0.61.0,<0.62.0",
+    "psutil>=5.9.6,<5.10.0",
+    
+    # Test databases
+    "pytest-postgresql>=5.0.0,<5.1.0",
+    "pytest-redis>=3.0.2,<3.1.0",
+    
+    # Coverage and reporting
+    "coverage[toml]>=7.3.0,<7.4.0",
+    "pytest-cov>=4.1.0,<4.2.0",
+    "codecov>=2.1.13,<2.2.0",
+]
+
+# Development dependencies
+dev = [
+    "black>=23.11.0,<23.12.0",
+    "isort>=5.12.0,<5.13.0", 
+    "flake8>=6.1.0,<6.2.0",
+    "mypy>=1.7.0,<1.8.0",
+    "pre-commit>=3.5.0,<3.6.0",
+    "bandit>=1.7.5,<1.8.0",
+    "safety>=2.3.0,<2.4.0",
+]
+
+# Documentation dependencies
+docs = [
+    "mkdocs>=1.5.3,<1.6.0",
+    "mkdocs-material>=9.4.0,<9.5.0",
+    "mkdocstrings[python]>=0.24.0,<0.25.0",
+]
+
+# Production dependencies
+prod = [
+    "gunicorn>=21.2.0,<21.3.0",
+    "gevent>=23.9.1,<23.10.0",
+]
+
+# All optional dependencies
+all = [
+    "comfyui-serverless[test,dev,docs,prod]"
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/comfyui-serverless"
+Documentation = "https://comfyui-serverless.readthedocs.io"
+Repository = "https://github.com/your-org/comfyui-serverless.git"
+Issues = "https://github.com/your-org/comfyui-serverless/issues"
+Changelog = "https://github.com/your-org/comfyui-serverless/blob/main/CHANGELOG.md"
+
+[project.scripts]
+comfyui-server = "src.api.main:main"
+comfyui-worker = "src.workers.celery_worker:main"
+comfyui-migrate = "src.database.migrate:main"
+
+# Tool configurations
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.json", "*.toml", "*.cfg", "*.ini"]
+
+# Black formatting
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+# isort import sorting
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 100
+known_first_party = ["src"]
+known_third_party = ["fastapi", "pydantic", "sqlalchemy", "celery", "redis", "boto3"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+# MyPy type checking
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "celery.*",
+    "redis.*",
+    "boto3.*", 
+    "botocore.*",
+    "PIL.*",
+    "structlog.*",
+    "prometheus_client.*",
+]
+ignore_missing_imports = true
+
+# Pytest configuration
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config", 
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml:coverage.xml",
+    "--cov-branch",
+    "--cov-fail-under=80",
+    "--tb=short",
+    "--durations=10"
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: Unit tests - fast, isolated tests with mocked dependencies",
+    "integration: Integration tests - test component interactions", 
+    "e2e: End-to-end tests - test complete user workflows",
+    "performance: Performance and load tests",
+    "slow: Tests that take a long time to run",
+    "gpu: Tests that require GPU resources",
+    "external: Tests that require external services",
+    "workflow: Tests related to workflow execution",
+    "auth: Tests related to authentication",
+    "api: Tests for API endpoints",
+    "database: Tests that interact with the database",
+    "redis: Tests that require Redis",
+    "s3: Tests that require S3/storage",
+    "celery: Tests that require Celery workers",
+    "webhook: Tests for webhook functionality",
+    "monitoring: Tests for monitoring and metrics",
+    "model: Tests related to model management",
+    "file: Tests for file upload/download"
+]
+asyncio_mode = "auto"
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(name)s: %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::UserWarning:celery.*",
+    "ignore::UserWarning:aiohttp.*"
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/venv/*",
+    "*/.venv/*",
+    "*/migrations/*",
+    "*/alembic/*"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError", 
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod"
+]
+ignore_errors = true
+show_missing = true
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+# Bandit security linting
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B601"]  # Skip assert_used and shell_injection in tests
+
+# Ruff linting (alternative to flake8)
+[tool.ruff]
+line-length = 100
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+target-version = "py39"
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["S101"]  # Use of assert detected
+
+# Pre-commit hooks configuration
+[tool.pre-commit]
+
+[[tool.pre-commit.repos]]
+repo = "local"
+
+[[tool.pre-commit.repos.hooks]]
+id = "black"
+name = "black"
+entry = "black"
+language = "system"
+types = ["python"]
+
+[[tool.pre-commit.repos.hooks]]
+id = "isort"
+name = "isort"
+entry = "isort"
+language = "system"
+types = ["python"]
+
+[[tool.pre-commit.repos.hooks]]
+id = "flake8"
+name = "flake8"
+entry = "flake8"
+language = "system"
+types = ["python"]
+
+[[tool.pre-commit.repos.hooks]]
+id = "mypy"
+name = "mypy"
+entry = "mypy"
+language = "system"
+types = ["python"]
+args = ["--ignore-missing-imports"]
+
+[[tool.pre-commit.repos.hooks]]
+id = "bandit"
+name = "bandit"
+entry = "bandit"
+language = "system"
+types = ["python"]
+args = ["-r", "src/"]

@@ -1,0 +1,44 @@
+# RunPod Serverless Dockerfile für ComfyUI API
+FROM runpod/pytorch:2.2.0-py3.10-cuda12.1.1-devel-ubuntu22.04
+
+# Set environment variables
+ENV PYTHONPATH=/workspace/src
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    git \
+    curl \
+    libpq-dev \
+    redis-server \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set work directory
+WORKDIR /workspace
+
+# Copy requirements and install Python dependencies
+COPY src/requirements.txt ./
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Install RunPod SDK
+RUN pip install runpod
+
+# Copy application code
+COPY src/ ./src/
+COPY runpod_handler.py ./
+
+# Create necessary directories
+RUN mkdir -p logs temp outputs models
+
+# Set permissions
+RUN chmod +x /workspace/runpod_handler.py
+
+# Expose port (RunPod will handle this automatically)
+EXPOSE 8000
+
+# RunPod handler command
+CMD ["python", "runpod_handler.py"]
