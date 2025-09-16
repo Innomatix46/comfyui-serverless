@@ -37,5 +37,5 @@ RUN chmod +x /workspace/runpod_handler.py
 # Expose port
 EXPOSE 8000
 
-# Start Redis and run handler with host validation disabled
-CMD redis-server --daemonize yes && python runpod_handler_simple.py
+# Start Redis and run handler
+CMD redis-server --daemonize yes && python runpod_handler.py
